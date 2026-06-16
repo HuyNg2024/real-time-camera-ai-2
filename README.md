@@ -14,6 +14,8 @@ This repository turns a webcam feed into a small camera AI system:
 - Acknowledge alerts from an API/dashboard
 - View live status in a browser dashboard
 
+![Real-Time Camera AI Dashboard](docs/images/dashboard.png)
+
 ## Features
 
 - YOLO tracking with `track_id`
@@ -63,6 +65,29 @@ Open the dashboard:
 ```text
 http://127.0.0.1:8000/dashboard
 ```
+
+## Demo Flow
+
+For a clean Docker demo with sample data:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\reset_docker_demo.ps1
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/dashboard
+```
+
+To connect a real webcam YOLO run to the Docker database:
+
+```powershell
+.\run_yolo_docker_db.ps1
+```
+
+The dashboard will update with raw detections, active object events, snapshots, and alerts.
 
 Health check:
 
