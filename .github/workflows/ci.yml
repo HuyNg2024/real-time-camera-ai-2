@@ -1,0 +1,79 @@
+name: Camera AI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "15432"
+      PGDATABASE: camera_ai
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      CAMERA_AI_API_BASE: http://127.0.0.1:8000
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          python -m pip install --upgrade pip
+          python -m pip install fastapi uvicorn psycopg2-binary pydantic
+
+      - name: Validate Docker Compose config
+        run: docker compose config --quiet
+
+      - name: Start Docker services
+        run: docker compose up -d --build
+
+      - name: Wait for API health
+        shell: pwsh
+        run: |
+          $ready = $false
+          for ($i = 1; $i -le 45; $i++) {
+              try {
+                  $health = Invoke-RestMethod "$env:CAMERA_AI_API_BASE/health" -TimeoutSec 3
+                  if ($health.api -eq "ok" -and $health.database -eq "ok") {
+                      $ready = $true
+                      break
+                  }
+              }
+              catch {
+                  Start-Sleep -Seconds 2
+              }
+          }
+          if (-not $ready) {
+              docker compose logs --tail=120
+              throw "API did not become ready"
+          }
+
+      - name: Seed demo data
+        shell: pwsh
+        run: ./run_seed_demo.ps1
+
+      - name: Run system test
+        shell: pwsh
+        run: ./test_system.ps1
+
+      - name: Show Docker logs on failure
+        if: failure()
+        run: docker compose logs --tail=160
+
+      - name: Stop Docker services
+        if: always()
+        run: docker compose down -v
