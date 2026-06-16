@@ -30,6 +30,22 @@ ENV/
 *.log
 benchmarks.log
 runs/
+snapshots/
+datasets/
+weights/
+yolo*.pt
+*.pt
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.onnx
+*.engine
+*.tflite
+*.torchscript
 
 # Dependencies
 node_modules/

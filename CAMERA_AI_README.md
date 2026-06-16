@@ -54,6 +54,32 @@ http://127.0.0.1:8000/dashboard
 http://127.0.0.1:8000/health
 ```
 
+## Docker
+
+Docker Compose runs PostgreSQL and the FastAPI dashboard. Webcam YOLO tracking should still run on Windows with `run_yolo.ps1`.
+Start Docker Desktop first, then run:
+
+```powershell
+docker compose up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000/dashboard
+```
+
+The PostgreSQL container uses host port `5433`. To make host YOLO write to the Docker database:
+
+```powershell
+$env:PGHOST = "127.0.0.1"
+$env:PGPORT = "5433"
+$env:PGDATABASE = "camera_ai"
+$env:PGUSER = "postgres"
+$env:PGPASSWORD = "postgres"
+.\run_yolo.ps1
+```
+
 ## Endpoints
 
 ```text
@@ -114,6 +140,7 @@ CSV endpoints support `limit`, `camera_id`, `object_name`, and `hours`. Event an
 ```text
 run_api.ps1      Start FastAPI dashboard
 run_yolo.ps1     Start YOLO tracking with PostgreSQL logging
+run_docker.ps1   Start PostgreSQL and API dashboard with Docker Compose
 run_cleanup.ps1  Delete old detections/events/alerts/snapshots
 test_system.ps1  Check Python, PostgreSQL, API, dashboard, and endpoints
 ```

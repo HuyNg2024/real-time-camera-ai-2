@@ -1,0 +1,55 @@
+name: camera-ai
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: camera-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: camera_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - camera_ai_postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d camera_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camera-ai-api
+    restart: unless-stopped
+    environment:
+      PGDATABASE: camera_ai
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGHOST: db
+      PGPORT: "5432"
+      YOLO_CAMERA_ID: webcam_01
+      YOLO_POSTGRES: "1"
+      YOLO_POSTGRES_EVERY_N_FRAMES: "30"
+      YOLO_POSTGRES_EVENT_GAP_SECONDS: "10"
+      YOLO_POSTGRES_SAVE_SNAPSHOTS: "1"
+      YOLO_POSTGRES_SNAPSHOT_DIR: runs/postgres_snapshots
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./runs/postgres_snapshots:/app/runs/postgres_snapshots
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  camera_ai_postgres_data:
