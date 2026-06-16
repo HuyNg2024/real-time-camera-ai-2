@@ -8,16 +8,17 @@ This repository turns a webcam feed into a small camera AI system:
 - Store raw detections in PostgreSQL
 - Group detections into events
 - Save event snapshots
-- Create person alerts
+- Create configurable object alerts
 - Acknowledge alerts from an API/dashboard
 - View live status in a browser dashboard
 
 ## Features
 
 - YOLO tracking with `track_id`
-- PostgreSQL tables for `detections`, `detection_events`, and `alerts`
+- PostgreSQL tables for `detections`, `detection_events`, `alerts`, and `alert_rules`
 - Active event and hourly summary views
 - Snapshot image storage for new events
+- Database-driven alert rules with confidence and duration thresholds
 - FastAPI endpoints and dashboard
 - PowerShell scripts for Windows operation
 - Cleanup script for old data and snapshots
@@ -90,7 +91,27 @@ GET  /events
 GET  /alerts
 GET  /alerts/new
 POST /alerts/{alert_id}/ack
+POST /alerts/ack-all
+GET  /alert-rules
+POST /alert-rules
+PATCH /alert-rules/{rule_id}
 GET  /snapshots/{filename}
+```
+
+## Alert Rules
+
+The default schema creates a person alert rule:
+
+```text
+camera_id=* object_name=person alert_type=person_detected min_confidence=0.5
+```
+
+Create or update a rule with:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/alert-rules `
+  -ContentType "application/json" `
+  -Body '{"camera_id":"*","object_name":"cell phone","alert_type":"phone_detected","min_confidence":0.7,"min_duration_seconds":0,"enabled":true,"message_template":"{object_name} detected on {camera_id}"}'
 ```
 
 ## Notes

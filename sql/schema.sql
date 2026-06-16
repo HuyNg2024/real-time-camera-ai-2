@@ -47,6 +47,24 @@ CREATE TABLE IF NOT EXISTS alerts (
     track_id INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id BIGSERIAL PRIMARY KEY,
+    camera_id VARCHAR(100) NOT NULL DEFAULT '*',
+    object_name VARCHAR(100) NOT NULL,
+    alert_type VARCHAR(100) NOT NULL,
+    min_confidence NUMERIC(5,4) NOT NULL DEFAULT 0.5000,
+    min_duration_seconds INTEGER NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    message_template TEXT NOT NULL DEFAULT '{object_name} detected on {camera_id}',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(camera_id, object_name, alert_type)
+);
+
+INSERT INTO alert_rules (camera_id, object_name, alert_type, min_confidence, min_duration_seconds, enabled, message_template)
+VALUES ('*', 'person', 'person_detected', 0.5000, 0, TRUE, '{object_name} detected on {camera_id}')
+ON CONFLICT (camera_id, object_name, alert_type) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_detections_created_at ON detections(created_at);
 CREATE INDEX IF NOT EXISTS idx_detections_camera_time ON detections(camera_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_detections_object_time ON detections(object_name, created_at);
@@ -61,6 +79,9 @@ CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_event_type_unique
 ON alerts(event_id, alert_type)
 WHERE event_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled_object
+ON alert_rules(enabled, object_name, camera_id);
 
 CREATE OR REPLACE VIEW active_detection_events AS
 SELECT id,

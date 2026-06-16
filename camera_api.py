@@ -8,6 +8,7 @@ import psycopg2
 import psycopg2.extras
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
 
 
 app = FastAPI(title="Camera AI API")
@@ -19,6 +20,27 @@ DB_CONFIG = {
     "host": os.getenv("PGHOST", "localhost"),
     "port": int(os.getenv("PGPORT", "5432")),
 }
+
+
+class AlertRuleIn(BaseModel):
+    camera_id: str = "*"
+    object_name: str
+    alert_type: str
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    min_duration_seconds: int = Field(default=0, ge=0)
+    enabled: bool = True
+    message_template: str = "{object_name} detected on {camera_id}"
+
+
+class AlertRulePatch(BaseModel):
+    camera_id: str | None = None
+    object_name: str | None = None
+    alert_type: str | None = None
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_duration_seconds: int | None = Field(default=None, ge=0)
+    enabled: bool | None = None
+    message_template: str | None = None
+
 
 DASHBOARD_HTML = """
 <!doctype html>
@@ -202,6 +224,7 @@ DASHBOARD_HTML = """
         <a class="active" href="/dashboard">Dashboard</a>
         <a href="/active-events">Active Events</a>
         <a href="/alerts">Alerts API</a>
+        <a href="/alert-rules">Alert Rules API</a>
         <a href="/latest-detections">Detections API</a>
       </nav>
       <div class="side-status">
@@ -273,6 +296,10 @@ DASHBOARD_HTML = """
             <div class="table-wrap"><table id="summary"></table></div>
           </section>
           <section>
+            <div class="section-head"><h2>Alert Rules</h2><span class="hint">Object rules from database</span></div>
+            <div class="table-wrap"><table id="rules"></table></div>
+          </section>
+          <section>
             <div class="section-head"><h2>Recent Events</h2><span class="hint">Open and closed events</span></div>
             <div class="table-wrap"><table id="events"></table></div>
           </section>
@@ -336,6 +363,15 @@ DASHBOARD_HTML = """
       }
     }
 
+    async function toggleRule(id, enabled) {
+      await fetch(`/alert-rules/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !enabled })
+      });
+      await load();
+    }
+
     function filtered(rows) {
       const q = document.getElementById('filter').value.trim().toLowerCase();
       if (!q) return rows;
@@ -374,13 +410,14 @@ DASHBOARD_HTML = """
     }
 
     async function load() {
-      const [health, alerts, active, summary, events, detections] = await Promise.all([
+      const [health, alerts, active, summary, events, detections, rules] = await Promise.all([
         fetch('/health').then(r => r.json()),
         fetch('/alerts').then(r => r.json()),
         fetch('/active-events').then(r => r.json()),
         fetch('/webcam-summary').then(r => r.json()),
         fetch('/events?limit=20').then(r => r.json()),
-        fetch('/latest-detections?limit=20').then(r => r.json())
+        fetch('/latest-detections?limit=20').then(r => r.json()),
+        fetch('/alert-rules').then(r => r.json())
       ]);
 
       const viewAlerts = filtered(alerts);
@@ -419,6 +456,15 @@ DASHBOARD_HTML = """
         { key: 'total_detections', label: 'Detections' },
         { key: 'max_confidence', label: 'Max Conf', render: fmt },
         { key: 'last_seen', label: 'Last Seen', render: time }
+      ]);
+
+      renderTable('rules', rules, [
+        { key: 'object_name', label: 'Object' },
+        { key: 'camera_id', label: 'Camera' },
+        { key: 'min_confidence', label: 'Min Conf', render: fmt },
+        { key: 'min_duration_seconds', label: 'Min Sec' },
+        { key: 'enabled', label: 'Status', render: v => `<span class="pill ${v ? 'acknowledged' : 'closed'}">${v ? 'enabled' : 'disabled'}</span>` },
+        { key: 'id', label: 'Action', render: (id, row) => `<button onclick="toggleRule(${id}, ${row.enabled})">${row.enabled ? 'Disable' : 'Enable'}</button>` }
       ]);
 
       renderTable('events', viewEvents, [
@@ -497,6 +543,92 @@ def health() -> dict[str, Any]:
 @app.get("/active-events")
 def active_events() -> list[dict[str, Any]]:
     return query("SELECT * FROM active_detection_events")
+
+
+@app.get("/alert-rules")
+def alert_rules() -> list[dict[str, Any]]:
+    return query(
+        """
+        SELECT id, camera_id, object_name, alert_type, min_confidence, min_duration_seconds,
+               enabled, message_template, created_at, updated_at
+        FROM alert_rules
+        ORDER BY enabled DESC, object_name, camera_id, id
+        """
+    )
+
+
+@app.post("/alert-rules")
+def create_alert_rule(rule: AlertRuleIn) -> dict[str, Any]:
+    rows = query(
+        """
+        INSERT INTO alert_rules
+        (camera_id, object_name, alert_type, min_confidence, min_duration_seconds, enabled, message_template)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (camera_id, object_name, alert_type)
+        DO UPDATE SET
+            min_confidence = EXCLUDED.min_confidence,
+            min_duration_seconds = EXCLUDED.min_duration_seconds,
+            enabled = EXCLUDED.enabled,
+            message_template = EXCLUDED.message_template,
+            updated_at = NOW()
+        RETURNING id, camera_id, object_name, alert_type, min_confidence, min_duration_seconds,
+                  enabled, message_template, created_at, updated_at
+        """,
+        (
+            rule.camera_id,
+            rule.object_name,
+            rule.alert_type,
+            rule.min_confidence,
+            rule.min_duration_seconds,
+            rule.enabled,
+            rule.message_template,
+        ),
+    )
+    return rows[0]
+
+
+@app.patch("/alert-rules/{rule_id}")
+def update_alert_rule(rule_id: int, patch: AlertRulePatch) -> dict[str, Any]:
+    if hasattr(patch, "model_dump"):
+        updates = patch.model_dump(exclude_unset=True)
+    else:
+        updates = patch.dict(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    allowed = {
+        "camera_id",
+        "object_name",
+        "alert_type",
+        "min_confidence",
+        "min_duration_seconds",
+        "enabled",
+        "message_template",
+    }
+    set_parts = []
+    params: list[Any] = []
+    for key, value in updates.items():
+        if key not in allowed:
+            continue
+        set_parts.append(f"{key} = %s")
+        params.append(value)
+    if not set_parts:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    params.append(rule_id)
+    rows = query(
+        f"""
+        UPDATE alert_rules
+        SET {", ".join(set_parts)}, updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, camera_id, object_name, alert_type, min_confidence, min_duration_seconds,
+                  enabled, message_template, created_at, updated_at
+        """,
+        tuple(params),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+    return rows[0]
 
 
 @app.get("/alerts")

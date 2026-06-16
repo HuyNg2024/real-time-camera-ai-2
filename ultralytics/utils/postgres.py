@@ -67,31 +67,54 @@ def _insert_alert(
     confidence: float,
     snapshot_path: str,
     track_id: int | None,
+    duration_seconds: int = 0,
 ) -> None:
-    """Insert a single alert for a newly created event."""
-    if object_name != "person":
-        return
-
-    alert_type = "person_detected"
-    track_text = f" track {track_id}" if track_id is not None else ""
+    """Insert alerts for matching database rules."""
     cur.execute(
         """
-        INSERT INTO alerts
-        (camera_id, alert_type, object_name, event_id, message, confidence, snapshot_path, track_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (event_id, alert_type) WHERE event_id IS NOT NULL DO NOTHING
+        SELECT alert_type, message_template
+        FROM alert_rules
+        WHERE enabled = TRUE
+          AND object_name = %s
+          AND camera_id IN ('*', %s)
+          AND min_confidence <= %s
+          AND min_duration_seconds <= %s
+        ORDER BY CASE WHEN camera_id = %s THEN 0 ELSE 1 END, id
         """,
-        (
-            camera_id,
-            alert_type,
-            object_name,
-            event_id,
-            f"Person{track_text} detected on {camera_id}",
-            confidence,
-            snapshot_path,
-            track_id,
-        ),
+        (object_name, camera_id, confidence, duration_seconds, camera_id),
     )
+    rules = cur.fetchall()
+    if not rules:
+        return
+
+    track_text = f" track {track_id}" if track_id is not None else ""
+    for alert_type, message_template in rules:
+        message = (
+            message_template.replace("{object_name}", object_name)
+            .replace("{camera_id}", camera_id)
+            .replace("{track_id}", str(track_id) if track_id is not None else "")
+        )
+        if track_text and "{track_id}" not in message_template:
+            message = f"{message}{track_text}"
+
+        cur.execute(
+            """
+            INSERT INTO alerts
+            (camera_id, alert_type, object_name, event_id, message, confidence, snapshot_path, track_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (event_id, alert_type) WHERE event_id IS NOT NULL DO NOTHING
+            """,
+            (
+                camera_id,
+                alert_type,
+                object_name,
+                event_id,
+                message,
+                confidence,
+                snapshot_path,
+                track_id,
+            ),
+        )
 
 
 def _upsert_detection_event(cur, row: tuple, orig_img=None) -> None:
@@ -134,7 +157,7 @@ def _upsert_detection_event(cur, row: tuple, orig_img=None) -> None:
             last_confidence = %s
         FROM active_event
         WHERE e.id = active_event.id
-        RETURNING e.id
+        RETURNING e.id, e.snapshot_path, EXTRACT(EPOCH FROM (NOW() - e.start_time))::INTEGER
         """,
         (
             camera_id,
@@ -148,7 +171,19 @@ def _upsert_detection_event(cur, row: tuple, orig_img=None) -> None:
             confidence,
         ),
     )
-    if cur.fetchone():
+    updated_event = cur.fetchone()
+    if updated_event:
+        event_id, snapshot_path, duration_seconds = updated_event
+        _insert_alert(
+            cur,
+            event_id,
+            camera_id,
+            object_name,
+            confidence,
+            snapshot_path or "",
+            track_id,
+            duration_seconds,
+        )
         return
 
     snapshot_path = _save_snapshot(orig_img, camera_id, object_name, frame_id)

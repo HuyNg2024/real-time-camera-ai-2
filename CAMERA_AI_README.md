@@ -3,7 +3,7 @@
 This project extends Ultralytics YOLO with a local camera AI pipeline:
 
 - Webcam object detection and tracking
-- PostgreSQL storage for detections, events, and alerts
+- PostgreSQL storage for detections, events, alerts, and alert rules
 - Event snapshots
 - FastAPI JSON endpoints
 - Browser dashboard
@@ -66,7 +66,29 @@ GET  /events
 GET  /alerts
 GET  /alerts/new
 POST /alerts/{alert_id}/ack
+POST /alerts/ack-all
+GET  /alert-rules
+POST /alert-rules
+PATCH /alert-rules/{rule_id}
 GET  /snapshots/{filename}
+```
+
+## Alert Rules
+
+Alert creation is controlled by the `alert_rules` table. A rule matches by camera, object name, confidence, duration, and enabled state.
+
+Default rule:
+
+```text
+camera_id=* object_name=person alert_type=person_detected min_confidence=0.5 min_duration_seconds=0
+```
+
+Example: add a cell phone alert rule:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/alert-rules `
+  -ContentType "application/json" `
+  -Body '{"camera_id":"*","object_name":"cell phone","alert_type":"phone_detected","min_confidence":0.7,"min_duration_seconds":0,"enabled":true,"message_template":"{object_name} detected on {camera_id}"}'
 ```
 
 ## Runtime Scripts
