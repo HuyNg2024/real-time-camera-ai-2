@@ -119,8 +119,7 @@ SELECT camera_id,
        max_confidence,
        first_seen,
        last_seen
-FROM detection_summary_last_hour
-WHERE camera_id = 'webcam_01';
+FROM detection_summary_last_hour;
 
 CREATE OR REPLACE VIEW new_alerts AS
 SELECT *
