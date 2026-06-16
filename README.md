@@ -1,6 +1,8 @@
 # Real-Time Camera AI
 
+[![Release](https://img.shields.io/github/v/release/HuyNg2024/real-time-camera-ai)](https://github.com/HuyNg2024/real-time-camera-ai/releases)
 [![Camera AI CI](https://github.com/HuyNg2024/real-time-camera-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/HuyNg2024/real-time-camera-ai/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/HuyNg2024/real-time-camera-ai)](LICENSE)
 
 Real-time webcam object detection and tracking built on Ultralytics YOLO, PostgreSQL, and FastAPI.
 
