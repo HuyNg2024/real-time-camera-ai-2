@@ -7,6 +7,7 @@ This project extends Ultralytics YOLO with a local camera AI pipeline:
 - Event snapshots
 - FastAPI JSON endpoints
 - Browser dashboard
+- Dashboard charts for live monitoring
 - PowerShell run scripts for Windows
 
 ## Requirements

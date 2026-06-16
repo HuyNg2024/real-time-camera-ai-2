@@ -20,6 +20,7 @@ This repository turns a webcam feed into a small camera AI system:
 - Snapshot image storage for new events
 - Database-driven alert rules with confidence and duration thresholds
 - FastAPI endpoints and dashboard
+- Dashboard charts for object counts, alert status, and confidence
 - PowerShell scripts for Windows operation
 - Cleanup script for old data and snapshots
 

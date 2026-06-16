@@ -147,6 +147,7 @@ DASHBOARD_HTML = """
     .accent-rose { border-top: 3px solid var(--rose); }
     .accent-violet { border-top: 3px solid var(--violet); }
     .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 18px; align-items: start; }
+    .insights { display: grid; grid-template-columns: 1.4fr .8fr .8fr; gap: 14px; }
     .stack { display: grid; gap: 18px; }
     section { overflow: hidden; }
     .section-head {
@@ -225,6 +226,51 @@ DASHBOARD_HTML = """
     .rule-form .wide { grid-column: 1 / -1; }
     .rule-form .actions { display: flex; align-items: end; gap: 10px; }
     .form-status { color: var(--muted); font-size: 12px; align-self: center; }
+    .chart {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 130px) minmax(0, 1fr) 72px;
+      align-items: center;
+      gap: 10px;
+      min-height: 30px;
+    }
+    .bar-label { color: #dbe2ec; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: #101216;
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+    .bar-fill {
+      width: var(--value);
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--teal), var(--violet));
+    }
+    .bar-fill.alert-new { background: linear-gradient(90deg, var(--amber), var(--rose)); }
+    .bar-fill.alert-ack { background: linear-gradient(90deg, var(--green), var(--teal)); }
+    .bar-value { color: var(--muted); font-size: 12px; text-align: right; }
+    .mini-list {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+    }
+    .mini-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      color: #dbe2ec;
+      font-size: 13px;
+    }
+    .mini-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .mini-value { color: var(--teal); font-weight: 700; }
     .snapshot {
       min-height: 276px;
       display: grid;
@@ -237,6 +283,7 @@ DASHBOARD_HTML = """
       .shell { grid-template-columns: 1fr; }
       aside { display: none; }
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .insights { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .search { width: 42vw; }
     }
@@ -300,6 +347,21 @@ DASHBOARD_HTML = """
           <div class="card-value" id="kpi-latest">-</div>
           <div class="card-detail" id="kpi-latest-detail">Waiting for data</div>
         </div>
+      </div>
+
+      <div class="insights">
+        <section>
+          <div class="section-head"><h2>Detections by Object</h2><span class="hint">Last hour</span></div>
+          <div class="chart" id="object-chart"></div>
+        </section>
+        <section>
+          <div class="section-head"><h2>Alert Status</h2><span class="hint">Latest 50 alerts</span></div>
+          <div class="chart" id="alert-chart"></div>
+        </section>
+        <section>
+          <div class="section-head"><h2>Top Confidence</h2><span class="hint">By object</span></div>
+          <div class="mini-list" id="confidence-list"></div>
+        </section>
       </div>
 
       <div class="grid">
@@ -526,6 +588,51 @@ DASHBOARD_HTML = """
       preview.innerHTML = `<a href="${snapshotUrl(row.snapshot_path)}" target="_blank"><img src="${snapshotUrl(row.snapshot_path)}" alt="Detection snapshot"></a>`;
     }
 
+    function renderBars(id, rows, options = {}) {
+      const target = document.getElementById(id);
+      if (!rows.length) {
+        target.innerHTML = '<div class="muted">No data</div>';
+        return;
+      }
+      const max = Math.max(...rows.map(row => Number(row.value) || 0), 1);
+      target.innerHTML = rows.map(row => {
+        const percent = Math.max(4, Math.round(((Number(row.value) || 0) / max) * 100));
+        const cls = options.className ? ` ${options.className(row)}` : '';
+        return `
+          <div class="bar-row">
+            <div class="bar-label" title="${cell(row.label)}">${cell(row.label)}</div>
+            <div class="bar-track"><div class="bar-fill${cls}" style="--value:${percent}%"></div></div>
+            <div class="bar-value">${cell(row.value)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderInsights(alerts, summary) {
+      const objectRows = summary
+        .slice(0, 8)
+        .map(row => ({ label: row.object_name, value: row.total_detections }));
+      renderBars('object-chart', objectRows);
+
+      const alertCounts = alerts.reduce((counts, row) => {
+        counts[row.status] = (counts[row.status] || 0) + 1;
+        return counts;
+      }, {});
+      const alertRows = Object.entries(alertCounts).map(([label, value]) => ({ label, value }));
+      renderBars('alert-chart', alertRows, {
+        className: row => row.label === 'new' ? 'alert-new' : 'alert-ack'
+      });
+
+      const confidenceRows = summary
+        .slice()
+        .sort((a, b) => Number(b.max_confidence || 0) - Number(a.max_confidence || 0))
+        .slice(0, 6);
+      const list = document.getElementById('confidence-list');
+      list.innerHTML = confidenceRows.length
+        ? confidenceRows.map(row => `<div class="mini-item"><span>${cell(row.object_name)}</span><span class="mini-value">${fmt(row.max_confidence)}</span></div>`).join('')
+        : '<div class="muted">No data</div>';
+    }
+
     async function load() {
       const [health, alerts, active, summary, events, detections, rules] = await Promise.all([
         fetch('/health').then(r => r.json()),
@@ -545,6 +652,7 @@ DASHBOARD_HTML = """
 
       updateKpis(health, alerts, active, summary, detections);
       updateSnapshot([...active, ...events]);
+      renderInsights(alerts, summary);
 
       renderTable('alerts', viewAlerts, [
         { key: 'type', label: 'Type', render: v => `<span class="pill new">${cell(v)}</span>` },
