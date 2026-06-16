@@ -28,66 +28,282 @@ DASHBOARD_HTML = """
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera AI Dashboard</title>
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #f6f7f9; color: #1f2937; }
-    header { padding: 16px 24px; background: #111827; color: #fff; display: flex; justify-content: space-between; }
-    main { padding: 20px 24px; display: grid; gap: 20px; }
-    section { background: #fff; border: 1px solid #d8dde6; border-radius: 6px; overflow: hidden; }
-    h2 { margin: 0; padding: 12px 14px; font-size: 16px; border-bottom: 1px solid #e5e7eb; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th, td { padding: 10px 12px; border-bottom: 1px solid #edf0f4; text-align: left; white-space: nowrap; }
-    th { background: #f9fafb; font-weight: 600; }
+    :root {
+      --bg: #101113;
+      --panel: #181a1f;
+      --panel-2: #20232a;
+      --line: #2b3038;
+      --text: #eef2f7;
+      --muted: #949ca8;
+      --teal: #2dd4bf;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --violet: #a78bfa;
+      --blue: #60a5fa;
+      --green: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+    aside {
+      border-right: 1px solid var(--line);
+      background: #15171b;
+      padding: 22px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--teal), var(--violet));
+      color: #081014;
+      font-weight: 800;
+    }
+    nav { display: grid; gap: 6px; }
+    nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    nav a.active, nav a:hover { background: var(--panel-2); color: var(--text); }
+    .side-status {
+      margin-top: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    main { min-width: 0; padding: 22px; display: grid; gap: 18px; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    h1 { margin: 0; font-size: 22px; line-height: 1.2; }
+    .toolbar { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+    .search {
+      width: min(360px, 34vw);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      background: var(--panel);
+      outline: none;
+    }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .card, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 18px 36px rgba(0, 0, 0, .22);
+    }
+    .card { padding: 16px; min-height: 104px; display: grid; gap: 10px; }
+    .card-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .card-value { font-size: 26px; font-weight: 800; line-height: 1; }
+    .card-detail { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .accent-teal { border-top: 3px solid var(--teal); }
+    .accent-amber { border-top: 3px solid var(--amber); }
+    .accent-rose { border-top: 3px solid var(--rose); }
+    .accent-violet { border-top: 3px solid var(--violet); }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 18px; align-items: start; }
+    .stack { display: grid; gap: 18px; }
+    section { overflow: hidden; }
+    .section-head {
+      min-height: 52px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    h2 { margin: 0; font-size: 15px; }
+    .hint { color: var(--muted); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 11px 13px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { color: var(--muted); background: #1b1e24; font-weight: 650; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+    td { color: #dde3ec; }
     tr:last-child td { border-bottom: 0; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .muted { color: #6b7280; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e8f1ff; color: #1d4ed8; }
-    .alert { background: #fff7ed; color: #9a3412; }
-    .closed { background: #f3f4f6; color: #4b5563; }
-    .table-wrap { overflow-x: auto; }
-    button { border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; padding: 5px 8px; cursor: pointer; }
-    button:hover { background: #f8fafc; }
-    a { color: #1d4ed8; text-decoration: none; }
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { display: block; } }
+    .table-wrap { max-width: 100%; overflow-x: auto; }
+    .muted { color: var(--muted); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(96, 165, 250, .12);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .pill.new { background: rgba(251, 191, 36, .14); color: var(--amber); }
+    .pill.closed { background: rgba(148, 156, 168, .14); color: #c1c7d0; }
+    .pill.acknowledged { background: rgba(52, 211, 153, .12); color: var(--green); }
+    button {
+      border: 1px solid rgba(45, 212, 191, .45);
+      background: rgba(45, 212, 191, .12);
+      color: var(--teal);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 650;
+    }
+    button:hover { background: rgba(45, 212, 191, .2); }
+    a { color: var(--teal); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .snapshot {
+      min-height: 276px;
+      display: grid;
+      place-items: center;
+      background: #0d0f12;
+    }
+    .snapshot img { width: 100%; height: 276px; object-fit: contain; display: block; }
+    .snapshot-empty { color: var(--muted); padding: 24px; text-align: center; }
+    @media (max-width: 1100px) {
+      .shell { grid-template-columns: 1fr; }
+      aside { display: none; }
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+      .search { width: 42vw; }
+    }
+    @media (max-width: 640px) {
+      main { padding: 14px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .toolbar { width: 100%; justify-content: space-between; }
+      .search { width: 100%; }
+      .cards { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <div>Camera AI Dashboard</div>
-    <div class="muted" id="updated">Loading...</div>
-  </header>
-  <main>
-    <section>
-      <h2>Alerts</h2>
-      <div class="table-wrap"><table id="alerts"></table></div>
-    </section>
-    <section>
-      <h2>Active Events</h2>
-      <div class="table-wrap"><table id="active"></table></div>
-    </section>
-    <div class="grid">
-      <section>
-        <h2>Webcam Summary - Last Hour</h2>
-        <div class="table-wrap"><table id="summary"></table></div>
-      </section>
-      <section>
-        <h2>Recent Events</h2>
-        <div class="table-wrap"><table id="events"></table></div>
-      </section>
-    </div>
-    <section>
-      <h2>Latest Detections</h2>
-      <div class="table-wrap"><table id="detections"></table></div>
-    </section>
-  </main>
+  <div class="shell">
+    <aside>
+      <div class="brand"><div class="mark">AI</div><span>Camera AI</span></div>
+      <nav>
+        <a class="active" href="/dashboard">Dashboard</a>
+        <a href="/active-events">Active Events</a>
+        <a href="/alerts">Alerts API</a>
+        <a href="/latest-detections">Detections API</a>
+      </nav>
+      <div class="side-status">
+        <div>Database: <span id="db-status">checking</span></div>
+        <div>Refresh: 5 seconds</div>
+        <div>Camera: webcam_01</div>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <h1>Real-Time Camera AI Dashboard</h1>
+          <div class="hint">YOLO detections, object events, snapshots and alerts</div>
+        </div>
+        <div class="toolbar">
+          <input class="search" id="filter" type="search" placeholder="Filter object name">
+          <span id="updated">Loading...</span>
+        </div>
+      </header>
+
+      <div class="cards">
+        <div class="card accent-amber">
+          <div class="card-label">New Alerts</div>
+          <div class="card-value" id="kpi-alerts">0</div>
+          <div class="card-detail" id="kpi-alerts-detail">No pending alert</div>
+        </div>
+        <div class="card accent-teal">
+          <div class="card-label">Active Tracks</div>
+          <div class="card-value" id="kpi-active">0</div>
+          <div class="card-detail" id="kpi-active-detail">No active object</div>
+        </div>
+        <div class="card accent-violet">
+          <div class="card-label">Detections Last Hour</div>
+          <div class="card-value" id="kpi-detections">0</div>
+          <div class="card-detail" id="kpi-top-object">Top object: -</div>
+        </div>
+        <div class="card accent-rose">
+          <div class="card-label">Latest Detection</div>
+          <div class="card-value" id="kpi-latest">-</div>
+          <div class="card-detail" id="kpi-latest-detail">Waiting for data</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <section>
+            <div class="section-head"><h2>Alerts</h2><span class="hint">Acknowledge from here</span></div>
+            <div class="table-wrap"><table id="alerts"></table></div>
+          </section>
+          <section>
+            <div class="section-head"><h2>Active Events</h2><span class="hint">Currently visible objects</span></div>
+            <div class="table-wrap"><table id="active"></table></div>
+          </section>
+          <section>
+            <div class="section-head"><h2>Latest Detections</h2><span class="hint">Raw YOLO rows</span></div>
+            <div class="table-wrap"><table id="detections"></table></div>
+          </section>
+        </div>
+        <div class="stack">
+          <section>
+            <div class="section-head"><h2>Latest Snapshot</h2><span class="hint" id="snapshot-title">No snapshot selected</span></div>
+            <div class="snapshot" id="snapshot-preview"><div class="snapshot-empty">Snapshot appears here when an event has an image.</div></div>
+          </section>
+          <section>
+            <div class="section-head"><h2>Webcam Summary - Last Hour</h2><span class="hint">Grouped by object</span></div>
+            <div class="table-wrap"><table id="summary"></table></div>
+          </section>
+          <section>
+            <div class="section-head"><h2>Recent Events</h2><span class="hint">Open and closed events</span></div>
+            <div class="table-wrap"><table id="events"></table></div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
   <script>
     function cell(value) {
       if (value === null || value === undefined || value === "") return '<span class="muted">-</span>';
       return String(value);
     }
 
-    function snapshotLink(path) {
+    function fmt(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      const num = Number(value);
+      return Number.isFinite(num) ? num.toFixed(4) : String(value);
+    }
+
+    function time(value) {
+      if (!value) return '<span class="muted">-</span>';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? cell(value) : date.toLocaleString();
+    }
+
+    function snapshotUrl(path) {
       if (!path) return '<span class="muted">-</span>';
       const file = String(path).split(/[\\\\/]/).pop();
-      return `<a href="/snapshots/${encodeURIComponent(file)}" target="_blank">snapshot</a>`;
+      return `/snapshots/${encodeURIComponent(file)}`;
+    }
+
+    function snapshotLink(path) {
+      if (!path) return '<span class="muted">-</span>';
+      return `<a href="${snapshotUrl(path)}" target="_blank">snapshot</a>`;
     }
 
     function renderTable(id, rows, columns) {
@@ -104,8 +320,45 @@ DASHBOARD_HTML = """
       await load();
     }
 
+    function filtered(rows) {
+      const q = document.getElementById('filter').value.trim().toLowerCase();
+      if (!q) return rows;
+      return rows.filter(row => String(row.object_name || '').toLowerCase().includes(q));
+    }
+
+    function updateKpis(health, alerts, active, summary, detections) {
+      const newAlerts = alerts.filter(row => row.status === 'new');
+      const totalDetections = summary.reduce((sum, row) => sum + Number(row.total_detections || 0), 0);
+      const top = summary[0];
+      const latest = detections[0];
+
+      document.getElementById('kpi-alerts').textContent = newAlerts.length;
+      document.getElementById('kpi-alerts-detail').textContent = newAlerts[0] ? `${newAlerts[0].object_name} on ${newAlerts[0].camera_id}` : 'No pending alert';
+      document.getElementById('kpi-active').textContent = active.length;
+      document.getElementById('kpi-active-detail').textContent = active.length ? active.map(row => row.object_name).join(', ') : 'No active object';
+      document.getElementById('kpi-detections').textContent = totalDetections;
+      document.getElementById('kpi-top-object').textContent = top ? `Top object: ${top.object_name} (${top.total_detections})` : 'Top object: -';
+      document.getElementById('kpi-latest').textContent = latest ? latest.object_name : '-';
+      document.getElementById('kpi-latest-detail').textContent = latest ? `conf ${fmt(latest.confidence)} at frame ${cell(latest.frame_id)}` : 'Waiting for data';
+      document.getElementById('db-status').textContent = health.database || 'unknown';
+    }
+
+    function updateSnapshot(rows) {
+      const row = rows.find(item => item.snapshot_path);
+      const preview = document.getElementById('snapshot-preview');
+      const title = document.getElementById('snapshot-title');
+      if (!row) {
+        preview.innerHTML = '<div class="snapshot-empty">Snapshot appears here when an event has an image.</div>';
+        title.textContent = 'No snapshot selected';
+        return;
+      }
+      title.textContent = `${row.object_name} / ${row.status || 'event'}`;
+      preview.innerHTML = `<a href="${snapshotUrl(row.snapshot_path)}" target="_blank"><img src="${snapshotUrl(row.snapshot_path)}" alt="Detection snapshot"></a>`;
+    }
+
     async function load() {
-      const [alerts, active, summary, events, detections] = await Promise.all([
+      const [health, alerts, active, summary, events, detections] = await Promise.all([
+        fetch('/health').then(r => r.json()),
         fetch('/alerts').then(r => r.json()),
         fetch('/active-events').then(r => r.json()),
         fetch('/webcam-summary').then(r => r.json()),
@@ -113,55 +366,65 @@ DASHBOARD_HTML = """
         fetch('/latest-detections?limit=20').then(r => r.json())
       ]);
 
-      renderTable('alerts', alerts, [
-        { key: 'type', label: 'Type', render: v => `<span class="pill alert">${cell(v)}</span>` },
+      const viewAlerts = filtered(alerts);
+      const viewActive = filtered(active);
+      const viewSummary = filtered(summary);
+      const viewEvents = filtered(events);
+      const viewDetections = filtered(detections);
+
+      updateKpis(health, alerts, active, summary, detections);
+      updateSnapshot([...active, ...events]);
+
+      renderTable('alerts', viewAlerts, [
+        { key: 'type', label: 'Type', render: v => `<span class="pill new">${cell(v)}</span>` },
         { key: 'camera_id', label: 'Camera' },
         { key: 'object_name', label: 'Object' },
         { key: 'track_id', label: 'Track ID' },
-        { key: 'confidence', label: 'Confidence' },
-        { key: 'status', label: 'Status' },
-        { key: 'created_at', label: 'Created' },
+        { key: 'confidence', label: 'Confidence', render: fmt },
+        { key: 'status', label: 'Status', render: v => `<span class="pill ${cell(v)}">${cell(v)}</span>` },
+        { key: 'created_at', label: 'Created', render: time },
         { key: 'message', label: 'Message' },
         { key: 'id', label: 'Action', render: (id, row) => row.status === 'new' ? `<button onclick="ackAlert(${id})">ACK</button>` : '-' }
       ]);
 
-      renderTable('active', active, [
+      renderTable('active', viewActive, [
         { key: 'object_name', label: 'Object' },
         { key: 'track_id', label: 'Track ID' },
         { key: 'detection_count', label: 'Count' },
-        { key: 'max_confidence', label: 'Max Conf' },
-        { key: 'last_confidence', label: 'Last Conf' },
+        { key: 'max_confidence', label: 'Max Conf', render: fmt },
+        { key: 'last_confidence', label: 'Last Conf', render: fmt },
         { key: 'duration_seconds', label: 'Duration (s)' },
         { key: 'snapshot_path', label: 'Snapshot', render: snapshotLink }
       ]);
 
-      renderTable('summary', summary, [
+      renderTable('summary', viewSummary, [
         { key: 'object_name', label: 'Object' },
         { key: 'total_detections', label: 'Detections' },
-        { key: 'max_confidence', label: 'Max Conf' },
-        { key: 'last_seen', label: 'Last Seen' }
+        { key: 'max_confidence', label: 'Max Conf', render: fmt },
+        { key: 'last_seen', label: 'Last Seen', render: time }
       ]);
 
-      renderTable('events', events, [
+      renderTable('events', viewEvents, [
         { key: 'object_name', label: 'Object' },
         { key: 'track_id', label: 'Track ID' },
         { key: 'status', label: 'Status', render: v => `<span class="pill ${v === 'closed' ? 'closed' : ''}">${cell(v)}</span>` },
         { key: 'detection_count', label: 'Count' },
-        { key: 'max_confidence', label: 'Max Conf' },
+        { key: 'max_confidence', label: 'Max Conf', render: fmt },
         { key: 'snapshot_path', label: 'Snapshot', render: snapshotLink }
       ]);
 
-      renderTable('detections', detections, [
+      renderTable('detections', viewDetections, [
         { key: 'object_name', label: 'Object' },
         { key: 'track_id', label: 'Track ID' },
-        { key: 'confidence', label: 'Conf' },
+        { key: 'confidence', label: 'Conf', render: fmt },
         { key: 'frame_id', label: 'Frame' },
-        { key: 'created_at', label: 'Created' }
+        { key: 'created_at', label: 'Created', render: time }
       ]);
 
       document.getElementById('updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     }
 
+    document.getElementById('filter').addEventListener('input', load);
     load();
     setInterval(load, 5000);
   </script>
