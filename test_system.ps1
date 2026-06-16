@@ -90,7 +90,10 @@ Test-Step "CSV export endpoints" {
     $exports = @(
         "/export/detections.csv?limit=3",
         "/export/events.csv?limit=3",
-        "/export/alerts.csv?limit=3"
+        "/export/alerts.csv?limit=3",
+        "/export/detections.csv?limit=3&object_name=person",
+        "/export/events.csv?limit=3&status=closed",
+        "/export/alerts.csv?limit=3&status=new&hours=744"
     )
     foreach ($path in $exports) {
         $response = Invoke-WebRequest "$ApiBase$path" -TimeoutSec 5 -UseBasicParsing

@@ -99,6 +99,16 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8000/alert-rules `
 
 Rules can also be created from the `Alert Rules` panel on `/dashboard`.
 
+## CSV Export Filters
+
+CSV endpoints support `limit`, `camera_id`, `object_name`, and `hours`. Event and alert exports also support `status`.
+
+```text
+/export/detections.csv?object_name=person&camera_id=webcam_01&hours=24&limit=1000
+/export/events.csv?status=active&object_name=person&limit=1000
+/export/alerts.csv?status=new&object_name=cell phone&hours=24&limit=1000
+```
+
 ## Runtime Scripts
 
 ```text

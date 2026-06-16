@@ -125,6 +125,12 @@ DASHBOARD_HTML = """
     h1 { margin: 0; font-size: 22px; line-height: 1.2; }
     .toolbar { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
     .export-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .export-panel {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .export-actions a {
       display: inline-flex;
       align-items: center;
@@ -138,6 +144,18 @@ DASHBOARD_HTML = """
       font-weight: 650;
     }
     .export-actions a:hover { border-color: rgba(45, 212, 191, .55); color: var(--teal); text-decoration: none; }
+    .export-panel input, .export-panel select {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 9px;
+      color: var(--text);
+      background: var(--panel);
+      outline: none;
+      font-size: 12px;
+    }
+    .export-panel input { width: 118px; }
+    .export-panel .small { width: 76px; }
     .search {
       width: min(360px, 34vw);
       border: 1px solid var(--line);
@@ -352,10 +370,26 @@ DASHBOARD_HTML = """
           <div class="hint">YOLO detections, object events, snapshots and alerts</div>
         </div>
         <div class="toolbar">
-          <div class="export-actions">
-            <a href="/export/detections.csv?limit=1000">Detections CSV</a>
-            <a href="/export/events.csv?limit=1000">Events CSV</a>
-            <a href="/export/alerts.csv?limit=1000">Alerts CSV</a>
+          <div class="export-panel">
+            <select id="export-kind">
+              <option value="detections">Detections</option>
+              <option value="events">Events</option>
+              <option value="alerts">Alerts</option>
+            </select>
+            <input id="export-object" placeholder="object">
+            <input id="export-camera" placeholder="camera">
+            <select id="export-status">
+              <option value="">any status</option>
+              <option value="new">new</option>
+              <option value="acknowledged">acknowledged</option>
+              <option value="active">active</option>
+              <option value="closed">closed</option>
+            </select>
+            <input class="small" id="export-hours" type="number" min="1" max="744" placeholder="hours">
+            <input class="small" id="export-limit" type="number" min="1" max="10000" value="1000">
+            <div class="export-actions">
+              <a id="export-link" href="/export/detections.csv?limit=1000">Export CSV</a>
+            </div>
           </div>
           <input class="search" id="filter" type="search" placeholder="Filter object name">
           <span id="updated">Loading...</span>
@@ -693,6 +727,24 @@ DASHBOARD_HTML = """
       `).join('');
     }
 
+    function updateExportLink() {
+      const kind = document.getElementById('export-kind').value;
+      const params = new URLSearchParams();
+      const objectName = document.getElementById('export-object').value.trim();
+      const cameraId = document.getElementById('export-camera').value.trim();
+      const status = document.getElementById('export-status').value;
+      const hours = document.getElementById('export-hours').value;
+      const limit = document.getElementById('export-limit').value || '1000';
+
+      params.set('limit', limit);
+      if (objectName) params.set('object_name', objectName);
+      if (cameraId) params.set('camera_id', cameraId);
+      if (hours) params.set('hours', hours);
+      if ((kind === 'events' || kind === 'alerts') && status) params.set('status', status);
+
+      document.getElementById('export-link').href = `/export/${kind}.csv?${params.toString()}`;
+    }
+
     async function load() {
       const [health, config, alerts, active, summary, events, detections, rules] = await Promise.all([
         fetch('/health').then(r => r.json()),
@@ -775,6 +827,10 @@ DASHBOARD_HTML = """
     }
 
     document.getElementById('filter').addEventListener('input', load);
+    ['export-kind', 'export-object', 'export-camera', 'export-status', 'export-hours', 'export-limit'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateExportLink);
+      document.getElementById(id).addEventListener('change', updateExportLink);
+    });
     document.getElementById('rule-form').addEventListener('submit', saveRule);
     document.querySelector('#rule-form [name="object_name"]').addEventListener('input', event => {
       const alertType = document.querySelector('#rule-form [name="alert_type"]');
@@ -785,6 +841,7 @@ DASHBOARD_HTML = """
     document.querySelector('#rule-form [name="alert_type"]').addEventListener('input', event => {
       event.target.dataset.edited = '1';
     });
+    updateExportLink();
     load();
     setInterval(load, 5000);
   </script>
@@ -822,6 +879,30 @@ def csv_response(rows: list[dict[str, Any]], filename: str) -> Response:
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def add_export_filters(
+    where: list[str],
+    params: list[Any],
+    camera_id: str | None = None,
+    object_name: str | None = None,
+    status: str | None = None,
+    hours: int | None = None,
+    timestamp_column: str = "created_at",
+) -> None:
+    if camera_id:
+        where.append("camera_id = %s")
+        params.append(camera_id)
+    if object_name:
+        where.append("object_name = %s")
+        params.append(object_name)
+    if status:
+        where.append("status = %s")
+        params.append(status)
+    if hours is not None:
+        hours = min(max(hours, 1), 24 * 31)
+        where.append(f"{timestamp_column} >= NOW() - (%s * INTERVAL '1 hour')")
+        params.append(hours)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1063,49 +1144,99 @@ def events(limit: int = 50) -> list[dict[str, Any]]:
 
 
 @app.get("/export/detections.csv")
-def export_detections(limit: int = 1000) -> Response:
+def export_detections(
+    limit: int = 1000,
+    camera_id: str | None = None,
+    object_name: str | None = None,
+    hours: int | None = None,
+) -> Response:
     limit = min(max(limit, 1), 10000)
+    where: list[str] = []
+    params: list[Any] = []
+    add_export_filters(where, params, camera_id=camera_id, object_name=object_name, hours=hours)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit)
     rows = query(
-        """
+        f"""
         SELECT id, camera_id, object_name, track_id, confidence, x1, y1, x2, y2,
                image_path, model_name, frame_id, created_at
         FROM detections
+        {where_sql}
         ORDER BY created_at DESC
         LIMIT %s
         """,
-        (limit,),
+        tuple(params),
     )
     return csv_response(rows, "detections.csv")
 
 
 @app.get("/export/events.csv")
-def export_events(limit: int = 1000) -> Response:
+def export_events(
+    limit: int = 1000,
+    camera_id: str | None = None,
+    object_name: str | None = None,
+    status: str | None = None,
+    hours: int | None = None,
+) -> Response:
     limit = min(max(limit, 1), 10000)
+    where: list[str] = []
+    params: list[Any] = []
+    add_export_filters(
+        where,
+        params,
+        camera_id=camera_id,
+        object_name=object_name,
+        status=status,
+        hours=hours,
+        timestamp_column="end_time",
+    )
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit)
     rows = query(
-        """
+        f"""
         SELECT id, camera_id, object_name, track_id, status, detection_count,
                max_confidence, last_confidence, snapshot_path, start_time, end_time
         FROM detection_events
+        {where_sql}
         ORDER BY end_time DESC
         LIMIT %s
         """,
-        (limit,),
+        tuple(params),
     )
     return csv_response(rows, "events.csv")
 
 
 @app.get("/export/alerts.csv")
-def export_alerts(limit: int = 1000) -> Response:
+def export_alerts(
+    limit: int = 1000,
+    camera_id: str | None = None,
+    object_name: str | None = None,
+    status: str | None = None,
+    hours: int | None = None,
+) -> Response:
     limit = min(max(limit, 1), 10000)
+    where: list[str] = []
+    params: list[Any] = []
+    add_export_filters(
+        where,
+        params,
+        camera_id=camera_id,
+        object_name=object_name,
+        status=status,
+        hours=hours,
+    )
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit)
     rows = query(
-        """
+        f"""
         SELECT id, camera_id, alert_type, object_name, track_id, event_id, message,
                confidence, snapshot_path, status, created_at
         FROM alerts
+        {where_sql}
         ORDER BY created_at DESC
         LIMIT %s
         """,
-        (limit,),
+        tuple(params),
     )
     return csv_response(rows, "alerts.csv")
 
